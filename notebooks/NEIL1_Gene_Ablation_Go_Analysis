@@ -1,0 +1,115 @@
+# Load necessary libraries
+if (!require("BiocManager", quietly = TRUE)) {
+  install.packages("BiocManager")
+}
+library(BiocManager)
+
+# Install additional Bioconductor packages
+BiocManager::install("org.Hs.eg.db")
+BiocManager::install("GOstats")
+BiocManager::install("GO.db")
+BiocManager::install("Category")
+
+# Load the installed libraries
+library(org.Hs.eg.db)
+library(GOstats)
+library(GO.db)
+library(Category)
+
+# Read the input CSV file containing significant gene expression results
+# The file has a header, is comma-separated, and the row names are gene symbols
+resSig <- read.csv(file="N1KO_p.05_log1-1_results.csv", header=TRUE, sep=",", row.names=1)
+
+# Display the contents of the dataframe
+resSig
+
+# Extract row names (gene symbols) from the dataframe
+resSigrownames <- row.names(resSig)
+
+# Subset the data to get induced genes (log2 fold change > 1)
+resSigind <- resSig[which(resSig$log2FoldChange > 1), ]
+
+# Subset the data to get repressed genes (log2 fold change < -1)
+resSigrep <- resSig[which(resSig$log2FoldChange < -1), ]
+
+# Get the gene symbols for the induced genes
+genesymbolind <- row.names(resSigind)
+genesymbolind
+
+# Get the gene symbols for the repressed genes
+genesymbolrep <- row.names(resSigrep)
+genesymbolrep
+
+# Create an object for the human gene annotation package
+hs <- org.Hs.eg.db
+
+# Map the gene symbols to ENTREZ IDs and retrieve their symbols from the human database
+# This step is applied to all genes
+all <- select(hs, 
+              keys = resSigrownames,
+              columns = c("ENTREZID", "SYMBOL"),
+              keytype = "SYMBOL")
+
+# Ensure unique gene symbols are extracted
+allunique <- unique(all[2])
+
+# Map the induced genes to ENTREZ IDs
+induced <- select(hs, 
+                  keys = genesymbolind,
+                  columns = c("ENTREZID", "SYMBOL"),
+                  keytype = "SYMBOL")
+
+# Ensure unique symbols for induced genes
+inducedunique <- unique(induced[2])
+
+# Map the repressed genes to ENTREZ IDs
+repressed <- select(hs, 
+                    keys = genesymbolrep,
+                    columns = c("ENTREZID", "SYMBOL"),
+                    keytype = "SYMBOL")
+
+# Ensure unique symbols for repressed genes
+repressedunique <- unique(repressed[2])
+
+# Convert the induced and repressed gene lists to dataframes for easier manipulation
+induced <- data.frame(induced)
+repressed <- data.frame(repressed)
+
+#####################################################################
+# GO Terms Analysis
+
+# Set parameters for GO Hypergeometric tests for induced genes
+downregparams <- new("GOHyperGParams", 
+                     geneIds = inducedunique$ENTREZID, 
+                     universeGeneIds = allunique$ENTREZID, 
+                     ontology = "BP",  # Biological Process ontology
+                     annotation = "org.Hs.eg.db",
+                     pvalueCutoff = 0.1,  # p-value cutoff for enrichment significance
+                     testDirection = "over")  # Test for over-representation
+
+# Perform GO enrichment test for induced genes
+underRepresented <- hyperGTest(downregparams)
+
+# Summarize the GO terms that are enriched for induced genes
+GO.alldown <- summary(underRepresented)
+GO.alldown
+
+# Set parameters for GO Hypergeometric tests for repressed genes
+upregparams <- new("GOHyperGParams", 
+                   geneIds = repressedunique$ENTREZID, 
+                   universeGeneIds = allunique$ENTREZID, 
+                   ontology = "BP",  # Biological Process ontology
+                   annotation = "org.Hs.eg.db",
+                   pvalueCutoff = 0.1,  # p-value cutoff for enrichment significance
+                   testDirection = "over")  # Test for over-representation
+
+# Perform GO enrichment test for repressed genes
+upRepresented <- hyperGTest(upregparams)
+
+# Summarize the GO terms that are enriched for repressed genes
+GO.allup <- summary(upRepresented)
+GO.allup
+
+# Save the results of GO enrichment analysis to CSV files for both induced and repressed genes
+write.csv(as.data.frame(GO.allup), file="upregGoterms.csv")
+write.csv(as.data.frame(GO.alldown), file="downregGoterms.csv")
