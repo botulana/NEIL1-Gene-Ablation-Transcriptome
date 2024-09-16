@@ -16,46 +16,26 @@ The project combines RNA sequencing (RNA-Seq) data, bioinformatics pipelines, an
 
 ## Contents of the Repository
 
-- **data/**: Contains sample datasets used in the analysis (if allowed for sharing) or mock data that replicates the study's structure.
-- **src/**: Source code for data preprocessing, quality control, alignment, and analysis.
-- **notebooks/**: Jupyter notebooks with detailed step-by-step analysis, including:
+- **notebooks/**: code with detailed step-by-step analysis, including:
   - RNA-Seq data processing (quality control, trimming, alignment)
-  - Differential expression analysis using tools such as `DESeq2` or `edgeR`
-  - Pathway enrichment and functional annotation
+  - Differential expression analysis using DESeq2 
+  - Gene Ontology Term Analysis 
 - **results/**: Outputs including plots, gene expression heatmaps, PCA, volcano plots, and pathway analysis results.
-- **thesis/**: A copy of the final written thesis (optional).
+- **thesis/**: A copy of the final written thesis.
 
 ---
 
 ## Key Features
 
-- **RNA-Seq Workflow**: Full RNA-Seq analysis pipeline using tools such as `FastQC`, `Trim Galore!`, `STAR`, `HTSeq`, `DESeq2`, and more.
+- **RNA-Seq Workflow**: RNA-Seq analysis pipeline.
 - **Differential Expression Analysis**: Identification of genes significantly altered due to NEIL1 ablation, with rigorous statistical testing.
 - **Functional Enrichment**: Pathway and gene ontology (GO) analysis to pinpoint biological processes impacted by NEIL1 knockout.
 - **Reproducible Research**: All scripts and analysis workflows are designed to ensure reproducibility.
 
----
-
-## Installation & Requirements
-
-To run the analysis, you’ll need the following tools and libraries installed:
-
-- **Python 3.x**: For scripting and data handling.
-- **R**: For statistical analysis and visualization (specifically, `DESeq2`).
-- **Jupyter Notebooks**: For interactive exploration of the data.
-- **RNA-Seq tools**:
-  - `FastQC`
-  - `Trim Galore!`
-  - `STAR`
-  - `HTSeq`
-  - `DESeq2`
-
----
 
 ## Data Description
 
 - **Transcriptome Data**: RNA-Seq data collected from Htert RPE-1 cells with and without NEIL1 gene ablation.
-- **Data Preprocessing**: Steps include trimming, alignment to the reference genome, and quantification of gene expression levels.
 - **Differential Expression**: Genes with significant expression changes identified using statistical thresholds (e.g., adjusted p-value < 0.05 and log2 fold change > |1|).
 
 ---
