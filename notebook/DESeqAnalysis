@@ -1,0 +1,176 @@
+# Load and install necessary libraries
+if (!require("BiocManager", quietly = TRUE)) {
+  install.packages("BiocManager")
+}
+library(BiocManager)
+
+# Install additional Bioconductor packages if not already installed
+BiocManager::install("DESeq2")
+BiocManager::install("GenomeInfoDb", force = TRUE)
+
+# Load required libraries
+library(DESeq2)
+library(GenomeInfoDb)
+
+# Load count data
+# This file contains the raw count data with genes as rows and samples as columns
+counts <- read.csv(file="N1data.csv", header=TRUE, sep=",", row.names=1)
+
+# Load experimental design data
+# This file contains the experimental design information with samples as rows
+expdesign <- read.csv("exp_design N1.csv", header=TRUE, row.names=1, sep=",")
+
+# Create DESeq2 dataset object
+# This object will be used for differential expression analysis
+dds <- DESeqDataSetFromMatrix(countData = counts, colData = expdesign, design = ~ condition)
+
+# Filtering the counts
+# Retain genes with at least 1 count across all samples
+keep <- rowSums(counts(dds)) >= 1
+dds <- dds[keep,]
+
+# Differential expression analysis
+# Estimate size factors to account for differences in total read counts between samples
+dds <- estimateSizeFactors(dds)
+
+# Filter genes with at least 5 counts in at least 3 samples
+idx <- rowSums(counts(dds, normalized=TRUE) >= 5) >= 3
+
+# Estimate dispersion (variability) of gene expression
+dds <- estimateDispersions(dds)
+
+# Plot dispersion estimates
+# This plot shows the dispersion of each gene and the trend line
+plotDispEsts(dds)
+# Help on the dispersion plot
+help("plotDispEsts")
+
+# Relevel condition factor to ensure correct reference level
+dds$condition <- relevel(dds$condition, ref = "WT")
+
+# Perform differential expression analysis
+dds <- DESeq(dds)
+
+# Obtain results from the DESeq analysis
+res <- results(dds)
+# Display the first few results
+head(res)
+
+# Count the number of differentially expressed genes with adjusted p-value < 0.05
+sum(res$padj < 0.05, na.rm = TRUE)
+
+# MA plot: shows the relationship between the mean count and fold change
+# A smaller fold change indicates greater significance
+plotMA(res, ylim=c(-5, 5))
+
+# Identify significant genes
+# Induced genes: log2 fold change > 1 and adjusted p-value < 0.05
+resSigind <- res[which(res$padj < 0.05 & res$log2FoldChange > 1), ]
+# Repressed genes: log2 fold change < -1 and adjusted p-value < 0.05
+resSigrep <- res[which(res$padj < 0.05 & res$log2FoldChange < -1), ]
+# Combine induced and repressed genes
+resSig <- rbind(resSigind, resSigrep)
+# Display row names for significant genes
+rownames(resSigind)
+rownames(resSigrep)
+
+# View the significant results
+View(resSig)
+
+# Increase print limit for large results
+options(max.print = 20000)
+
+# Plot counts for the gene with the lowest p-value across conditions
+plotCounts(dds, gene=which.min(res$padj), intgroup="condition")
+
+# Extract data for plotting
+d <- plotCounts(dds, gene=which.min(res$padj), intgroup="condition", returnData=TRUE)
+print(d)
+
+# Load ggplot2 for custom plotting
+library(ggplot2)
+
+# Create a custom plot for the gene with the lowest p-value
+ggplot(d, aes(x=condition, y=count)) + 
+  geom_point(position=position_jitter(w=0.1, h=0)) + 
+  scale_y_log10(breaks=c(25,100,400))
+
+# Display descriptions for result columns
+mcols(res)$description
+
+# Install and load additional packages for plotting
+install.packages("gplots")
+library(gplots)
+install.packages("viridis")
+library(viridis)
+
+# Perform variance stabilizing transformation for clustering and heatmaps
+deseq2VST <- vst(dds)
+deseq2VST <- assay(deseq2VST)
+deseq2VST <- as.data.frame(deseq2VST)
+deseq2VST$Gene <- rownames(deseq2VST)
+head(deseq2VST)
+
+# Filter significant genes for visualization
+res <- subset(res, padj < 0.1)
+sigGenes <- rownames(res[res$padj <= 0.05 & abs(res$log2FoldChange) > 2,])
+deseq2VST <- deseq2VST[deseq2VST$Gene %in% sigGenes,]
+
+# Load reshape2 for data manipulation
+library(reshape2)
+
+# Transform data for heatmap visualization
+deseq2VST_long <- melt(deseq2VST, id.vars=c("Gene"))
+
+# Create a heatmap of the transformed data
+heatmap <- ggplot(deseq2VST_long, aes(x=variable, y=Gene, fill=value)) + 
+  geom_raster() + 
+  scale_fill_viridis(trans="sqrt") + 
+  theme(axis.text.x=element_text(angle=65, hjust=1), 
+        axis.text.y=element_blank(), 
+        axis.ticks.y=element_blank())
+heatmap
+
+# Transform data for clustering
+deseq2VSTMatrix <- dcast(deseq2VST_long, Gene ~ variable)
+rownames(deseq2VSTMatrix) <- deseq2VSTMatrix$Gene
+deseq2VSTMatrix$Gene <- NULL
+
+# Calculate distance metrics for clustering
+distanceGene <- dist(deseq2VSTMatrix)
+distanceSample <- dist(t(deseq2VSTMatrix))
+
+# Perform hierarchical clustering
+clusterGene <- hclust(distanceGene, method="average")
+clusterSample <- hclust(distanceSample, method="average")
+
+# Install and load ggdendro for dendrogram plotting
+install.packages("ggdendro")
+library(ggdendro)
+
+# Create and plot a dendrogram for samples
+sampleModel <- as.dendrogram(clusterSample)
+sampleDendrogramData <- segment(dendro_data(sampleModel, type = "rectangle"))
+sampleDendrogram <- ggplot(sampleDendrogramData) + 
+  geom_segment(aes(x = x, y = y, xend = xend, yend = yend)) + 
+  theme_dendro()
+
+# Re-factor sample labels for plotting
+deseq2VST_long$variable <- factor(deseq2VST_long$variable, levels=clusterSample$labels[clusterSample$order])
+
+# Plot the heatmap with clustered samples
+heatmap <- ggplot(deseq2VST_long, aes(x=variable, y=Gene, fill=value)) + 
+  geom_raster() + 
+  scale_fill_viridis(trans="sqrt") + 
+  theme(axis.text.x=element_text(angle=65, hjust=1), 
+        axis.text.y=element_blank(), 
+        axis.ticks.y=element_blank())
+heatmap
+
+# Combine dendrogram and heatmap into one plot
+install.packages("gridExtra")
+library(gridExtra)
+grid.arrange(sampleDendrogram, heatmap, ncol=1, heights=c(1,5))
+
+# Save the significant results to a CSV file
+write.csv(as.data.frame(resSig), file="N1KO_p.05_log1-1_results.csv")
